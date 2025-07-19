@@ -19,7 +19,13 @@ more subspaces and more flexibly.
 
 ## Quick Start
 
-please follow the README in each folder to reproduce the results.
+For a minimal example, run the commonsense reasoning script directly:
+
+```bash
+python commonsense_reasoning/run_moslora.py
+```
+
+This will finetune and evaluate using TinyLlama by default. See each folder's README for additional options.
 
 - [ ] TODO: try to insert MoSLoRA into peft package.
 

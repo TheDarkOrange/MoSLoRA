@@ -1,31 +1,20 @@
-# Environment
+# Commonsense Reasoning
 
-Currently, we need to install all the packages **expect PEFT**, and then use the provided PEFT to finished the training and evalutaion.
+This folder contains a lightweight setup to finetune and evaluate MoSLoRA on commonsense reasoning datasets.
 
-We recommend to use the Anaconda following:
-```
-conda create -n moslora python=3.10
-source activate moslora
-pip install -r requirements.txt
-```
+## Usage
 
-# Dataset
+Simply run `run_moslora.py`:
 
-Get the train data and benchmarks from [here](https://github.com/AGI-Edgerunners/LLM-Adapters)
-
-# Training and Inference
-
-After that, modify the train_moslora.sh to your own path.
-
---model_p_or_n: the path or name of model
-
-remove the --use_moslora and you would get the results of vanilla LoRA.
-
-Just use:
-```
-bash train_moslora.sh
+```bash
+python run_moslora.py
 ```
 
-# Acknowledge
+The script automatically sets up output directories and launches training followed by evaluation on several benchmarks. By default it uses the openly available model `TinyLlama/TinyLlama-1.1B-Chat-v1.0`. You can override this by setting the environment variable `MOSLORA_BASE_MODEL` to any other checkpoint you have access to.
 
-This code is modifed based on the [LLM-Adapters](https://github.com/AGI-Edgerunners/LLM-Adapters), we thank for their efforts.
+Training expects the dataset `ft-training_set/commonsense_170k.json` to be placed inside this folder. Results and adapter weights will be written to `trained_models/` and `results/` respectively.
+If your dataset lives elsewhere, set the environment variable `MOSLORA_DATA_PATH` to its location before running the script.
+
+## Acknowledge
+
+This code is modified based on the [LLM-Adapters](https://github.com/AGI-Edgerunners/LLM-Adapters) project.
