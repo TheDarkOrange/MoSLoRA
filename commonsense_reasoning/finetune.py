@@ -8,11 +8,9 @@ import transformers
 from datasets import load_dataset
 from typing import List, Optional, Union
 
-"""
-Unused imports:
-import torch.nn as nn
-import bitsandbytes as bnb
-"""
+os.environ["TRANSFORMERS_NO_TF"] = "1"
+os.environ["USE_TF"] = "0"  # older transformers versions
+
 sys.path.append(os.path.join(os.getcwd(), "peft/src/"))
 from peft import (  # noqa: E402
     LoraConfig,
@@ -30,7 +28,7 @@ def train(
         data_path: str = "yahma/alpaca-cleaned",
         output_dir: str = "./lora-alpaca",
         adapter_name: str = "lora",
-        load_8bit : bool = False,
+        load_8bit: bool = False,
         # training hyperparams
         batch_size: int = 128,
         micro_batch_size: int = 4,
@@ -45,7 +43,7 @@ def train(
         lora_alpha: int = 16,
         lora_dropout: float = 0.05,
         lora_target_modules: List[str] = None,
-        use_moslora: bool=False,
+        use_moslora: bool = False,
         # bottleneck adapter hyperparams
         bottleneck_size: int = 256,
         non_linearity: str = "tanh",
@@ -65,7 +63,8 @@ def train(
         wandb_run_name: str = "",
         wandb_watch: str = "",  # options: false | gradients | all
         wandb_log_model: str = "",  # options: false | true
-        resume_from_checkpoint: str = None,  # either training checkpoint or final adapter
+        # either training checkpoint or final adapter
+        resume_from_checkpoint: str = None,
 ):
     print(
         f"Finetuning model with params:\n"
@@ -79,7 +78,7 @@ def train(
         f"cutoff_len: {cutoff_len}\n"
         f"val_set_size: {val_set_size}\n"
         f"lora_r: {lora_r}\n"
-        f"use_moslora: {use_moslora}\n" #! added
+        f"use_moslora: {use_moslora}\n"  # ! added
         f"lora_alpha: {lora_alpha}\n"
         f"lora_dropout: {lora_dropout}\n"
         f"lora_target_modules: {lora_target_modules}\n"
@@ -112,9 +111,12 @@ def train(
         device_map = {"": int(os.environ.get("LOCAL_RANK") or 0)}
         gradient_accumulation_steps = gradient_accumulation_steps // world_size
 
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    torch_dtype = torch.float16 if device == "cuda" else torch.float32
+
     # Check if parameter passed or if set within environ
     use_wandb = len(wandb_project) > 0 or (
-            "WANDB_PROJECT" in os.environ and len(os.environ["WANDB_PROJECT"]) > 0
+        "WANDB_PROJECT" in os.environ and len(os.environ["WANDB_PROJECT"]) > 0
     )
     # Only overwrite environ if wandb param passed
     if len(wandb_project) > 0:
@@ -128,23 +130,25 @@ def train(
         model = AutoModelForCausalLM.from_pretrained(
             base_model,
             load_in_8bit=load_8bit,
-            torch_dtype=torch.float16,
-            device_map=device_map,
+            torch_dtype=torch_dtype,
+            device_map=device_map if device == "cuda" else {"": device},
             trust_remote_code=True,
         )
     else:
         model = AutoModelForCausalLM.from_pretrained(
             base_model,
             load_in_8bit=False,
-            torch_dtype=torch.float16,
-            device_map={"": int(os.environ.get("LOCAL_RANK") or 0)},
+            torch_dtype=torch_dtype,
+            device_map={"": int(os.environ.get("LOCAL_RANK") or 0)
+                        } if device == "cuda" else {"": device},
             trust_remote_code=True,
         )
 
     if "llama2" in base_model:
         tokenizer = LlamaTokenizer.from_pretrained(base_model)
     else:
-        tokenizer = AutoTokenizer.from_pretrained(base_model, trust_remote_code=True)
+        tokenizer = AutoTokenizer.from_pretrained(
+            base_model, trust_remote_code=True)
 
     tokenizer.pad_token_id = (
         0  # unk. we want this to be different from the eos token
@@ -186,18 +190,19 @@ def train(
             user_prompt_len = len(tokenized_user_prompt["input_ids"])
 
             tokenized_full_prompt["labels"] = [
-                                                  -100
-                                              ] * user_prompt_len + tokenized_full_prompt["labels"][
-                                                                    user_prompt_len:
-                                                                    ]  # could be sped up, probably
+                -100
+            ] * user_prompt_len + tokenized_full_prompt["labels"][
+                user_prompt_len:
+            ]  # could be sped up, probably
         return tokenized_full_prompt
 
-    model = prepare_model_for_int8_training(model, use_gradient_checkpointing=use_gradient_checkpointing)
+    model = prepare_model_for_int8_training(
+        model, use_gradient_checkpointing=use_gradient_checkpointing)
     if adapter_name == "lora":
         config = LoraConfig(
             r=lora_r,
             lora_alpha=lora_alpha,
-            lora_use_mixer=use_moslora, #! added
+            lora_use_mixer=use_moslora,  # ! added
             target_modules=target_modules,
             lora_dropout=lora_dropout,
             bias="none",
@@ -206,7 +211,7 @@ def train(
 
     model = get_peft_model(model, config)
     if adapter_name == "prefix-tuning":
-        model.to('cuda')
+        model.to(device)
 
     if data_path.endswith(".json"):  # todo: support jsonl
         data = load_dataset("json", data_files=data_path)
@@ -233,7 +238,8 @@ def train(
         else:
             print(f"Checkpoint {checkpoint_name} not found")
 
-    model.print_trainable_parameters()  # Be more transparent about the % of trainable params.
+    # Be more transparent about the % of trainable params.
+    model.print_trainable_parameters()
 
     if val_set_size > 0:
         train_val = data["train"].train_test_split(
@@ -264,7 +270,7 @@ def train(
             warmup_steps=100,
             num_train_epochs=num_epochs,
             learning_rate=learning_rate,
-            fp16=True,
+            fp16=(device == "cuda"),
             logging_steps=10,
             optim="adamw_torch",
             evaluation_strategy="steps" if val_set_size > 0 else "no",
@@ -316,7 +322,7 @@ def generate_prompt(data_point):
                 {data_point["input"]}
                 
                 ### Response:
-                {data_point["output"]}""" # noqa: E501
+                {data_point["output"]}"""  # noqa: E501
     else:
         return f"""Below is an instruction that describes a task. Write a response that appropriately completes the request.  
 
@@ -324,7 +330,7 @@ def generate_prompt(data_point):
                 {data_point["instruction"]}
                 
                 ### Response:
-                {data_point["output"]}""" # noqa: E501
+                {data_point["output"]}"""  # noqa: E501
 
 
 if __name__ == "__main__":
