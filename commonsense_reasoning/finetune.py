@@ -1,15 +1,15 @@
-import os
-import sys
-from typing import List
-
-import fire
-import torch
-import transformers
-from datasets import load_dataset
 from typing import List, Optional, Union
+from datasets import load_dataset
+import torch
+import fire
+import os
 
 os.environ["TRANSFORMERS_NO_TF"] = "1"
 os.environ["USE_TF"] = "0"  # older transformers versions
+
+import sys
+from typing import List
+import transformers
 
 sys.path.append(os.path.join(os.getcwd(), "peft/src/"))
 from peft import (  # noqa: E402
