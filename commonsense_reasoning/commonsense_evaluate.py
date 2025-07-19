@@ -1,3 +1,6 @@
+from transformers import GenerationConfig, LlamaForCausalLM, LlamaTokenizer, AutoModelForCausalLM, AutoTokenizer
+from tqdm import tqdm
+from peft import PeftModel
 import copy
 import json
 import os
@@ -9,10 +12,10 @@ import fire
 import time
 import torch
 
-sys.path.append(os.path.join(os.getcwd(), "peft/src/")) #! added
-from peft import PeftModel
-from tqdm import tqdm
-from transformers import GenerationConfig, LlamaForCausalLM, LlamaTokenizer, AutoModelForCausalLM, AutoTokenizer
+os.environ["TRANSFORMERS_NO_TF"] = "1"
+os.environ["USE_TF"] = "0"  # older transformers versions
+
+sys.path.append(os.path.join(os.getcwd(), "peft/src/"))  # ! added
 
 if torch.cuda.is_available():
     device = "cuda"
@@ -46,7 +49,8 @@ def main(
             max_new_tokens=32,
             **kwargs,
     ):
-        prompts = [generate_prompt(instruction, input) for instruction in instructions]
+        prompts = [generate_prompt(instruction, input)
+                   for instruction in instructions]
         inputs = tokenizer(prompts, return_tensors="pt", padding=True)
         input_ids = inputs["input_ids"].to(device)
         generation_config = GenerationConfig(
@@ -105,7 +109,8 @@ def main(
             # print('prediction:', predict)
             # print('label:', label)
         # print('---------------')
-        print(f'\rtest:{idx + 1}/{total} | accuracy {correct}  {correct / current}')
+        print(
+            f'\rtest:{idx + 1}/{total} | accuracy {correct}  {correct / current}')
         # print('---------------')
         with open(save_file, 'w+') as f:
             json.dump(output_data, f, indent=4)
@@ -159,9 +164,11 @@ def load_data(args) -> list:
     json_data = json.load(open(file_path, 'r'))
     return json_data
 
+
 def create_batch(dataset, batch_size):
     batches = []
-    num_batch = len(dataset)//batch_size if len(dataset) % batch_size == 0 else len(dataset)//batch_size + 1
+    num_batch = len(
+        dataset)//batch_size if len(dataset) % batch_size == 0 else len(dataset)//batch_size + 1
     for i in range(num_batch):
         batch = dataset[i*batch_size: min((i+1)*batch_size, len(dataset))]
         batches.append(batch)
@@ -172,14 +179,15 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--dataset', choices=["boolq", "piqa", "social_i_qa", "hellaswag", "winogrande", "ARC-Challenge", "ARC-Easy", "openbookqa"],
                         required=True)
-    parser.add_argument('--model', choices=['LLaMA-7B', "LLaMA-13B",'BLOOM-7B', 'GPT-j-6B', 'LLaMA3'], required=True)
+    parser.add_argument(
+        '--model', choices=['LLaMA-7B', "LLaMA-13B", 'BLOOM-7B', 'GPT-j-6B', 'LLaMA3'], required=True)
     parser.add_argument('--adapter', choices=['LoRA', 'AdapterP', 'AdapterH', 'Parallel'],
                         required=True)
     parser.add_argument('--base_model', required=True)
     parser.add_argument('--lora_weights', required=True)
     parser.add_argument('--batch_size', type=int, required=True)
     parser.add_argument('--load_8bit', action='store_true', default=False)
-    parser.add_argument('--save_dir', type=str, default="Experiment" )
+    parser.add_argument('--save_dir', type=str, default="Experiment")
 
     return parser.parse_args()
 
@@ -195,10 +203,12 @@ def load_model(args) -> tuple:
     """
     base_model = args.base_model
     if not base_model:
-        raise ValueError(f'can not find base model name by the value: {args.model}')
+        raise ValueError(
+            f'can not find base model name by the value: {args.model}')
     lora_weights = args.lora_weights
     if not lora_weights:
-        raise ValueError(f'can not find lora weight, the value is: {lora_weights}')
+        raise ValueError(
+            f'can not find lora weight, the value is: {lora_weights}')
     if lora_weights == "None":
         print("do not use lora, evaluate the vanilla weight")
 
@@ -218,13 +228,13 @@ def load_model(args) -> tuple:
             torch_dtype=torch.float16,
             device_map="auto",
             trust_remote_code=True,
-        ) # fix zwq
+        )  # fix zwq
         if lora_weights != "None":
             model = PeftModel.from_pretrained(
                 model,
                 lora_weights,
                 torch_dtype=torch.float16,
-                device_map={"":0}
+                device_map={"": 0}
             )
     elif device == "mps":
         model = AutoModelForCausalLM.from_pretrained(
@@ -259,7 +269,7 @@ def load_model(args) -> tuple:
             model.half()  # seems to fix bugs for some users.
 
         model.eval()
-        
+
         # model = model.merge_and_unload()
 
         if torch.__version__ >= "2" and sys.platform != "win32":
@@ -291,13 +301,15 @@ def extract_answer(args, sentence: str) -> float:
         return pred_answers[0]
     elif dataset in ['social_i_qa', 'ARC-Challenge', 'ARC-Easy', 'openbookqa']:
         sentence_ = sentence.strip()
-        pred_answers = re.findall(r'answer1|answer2|answer3|answer4|answer5', sentence_)
+        pred_answers = re.findall(
+            r'answer1|answer2|answer3|answer4|answer5', sentence_)
         if not pred_answers:
             return ""
         return pred_answers[0]
     elif dataset == 'hellaswag':
         sentence_ = sentence.strip()
-        pred_answers = re.findall(r'ending1|ending2|ending3|ending4', sentence_)
+        pred_answers = re.findall(
+            r'ending1|ending2|ending3|ending4', sentence_)
         if not pred_answers:
             return ""
         return pred_answers[0]
