@@ -1,4 +1,3 @@
-from transformers import GenerationConfig, LlamaForCausalLM, LlamaTokenizer, AutoModelForCausalLM, AutoTokenizer
 from tqdm import tqdm
 from peft import PeftModel
 import copy
@@ -14,6 +13,8 @@ import torch
 
 os.environ["TRANSFORMERS_NO_TF"] = "1"
 os.environ["USE_TF"] = "0"  # older transformers versions
+
+from transformers import GenerationConfig, LlamaForCausalLM, LlamaTokenizer, AutoModelForCausalLM, AutoTokenizer
 
 sys.path.append(os.path.join(os.getcwd(), "peft/src/"))  # ! added
 
